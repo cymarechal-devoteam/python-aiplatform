@@ -15,6 +15,7 @@
 # limitations under the License.
 #
 
+import logging
 from typing import Dict, Union, Optional, Any, List
 
 from google.api_core import exceptions
@@ -34,6 +35,14 @@ from google.cloud.aiplatform.tensorboard import tensorboard_resource
 from google.cloud.aiplatform_v1.types import execution as execution_v1
 
 _LOGGER = base.Logger(__name__)
+
+
+class _MLFlowLogFilter(logging.Filter):
+    """Log filter to only show MLFlow logs for unsupported framework versions."""
+
+    def filter(self, record):
+        if record.msg.startswith("You are using an unsupported version of"):
+            return True
 
 
 def _get_experiment_schema_version() -> str:
@@ -240,6 +249,37 @@ class _ExperimentTracker:
 
         self._experiment = experiment
 
+    def _initialize_mlflow_plugin():
+        """Invokes the Vertex MLFlow plugin.
+
+        Adding our log filter to MLFlow before calling mlflow.autolog() with
+        silent=False will only surface warning logs when the installed ML
+        framework version used for autologging is not supported by MLFlow.
+        """
+
+        import mlflow
+        from mlflow.tracking._tracking_service import utils as mlflow_tracking_utils
+        from google.cloud.aiplatform._mlflow_plugin._vertex_mlflow_tracking import (
+            _VertexMlflowTracking,
+        )
+
+        mlflow_tracking_utils._tracking_store_registry.register(
+            "vertex-mlflow-plugin", _VertexMlflowTracking
+        )
+
+        mlflow.set_tracking_uri("vertex-mlflow-plugin://")
+
+        # Only show MLFlow warning logs for ML framework version mismatches
+        logging.getLogger("mlflow").setLevel(logging.WARNING)
+        logging.getLogger("mlflow").addFilter(_MLFlowLogFilter())
+
+        mlflow.autolog(
+            log_input_examples=False,
+            log_model_signatures=False,
+            log_models=False,
+            silent=False,  # using False to show unsupported framework version warnings with _MLFlowLogFilter
+        )
+
     def start_run(
         self,
         run: str,
@@ -337,6 +377,59 @@ class _ExperimentTracker:
             )
         finally:
             self._experiment_run = None
+
+    def autolog(self, disable=False):
+        """Enables autologging of parameters and metrics to Vertex Experiments.
+
+        After calling `aiplatform.autolog()`, any metrics and parameters from
+        model training calls with supported ML frameworks will be automatically
+        logged to Vertex Experiments.
+
+        Using autologging requires setting an experiment and experiment_tensorboard.
+
+        Args:
+            disable (bool):
+                Optional. Whether to disable autologging. Defaults to False.
+                If set to True, this resets the MLFlow tracking URI to its
+                previous state before autologging was called.
+        Raises:
+            ImportError:
+                If MLFlow is not installed. MLFlow is required to use
+                autologging in Vertex.
+            ValueError:
+                If experiment or experiment_tensorboard is not set.
+        """
+
+        try:
+            import mlflow
+        except ImportError:
+            raise ImportError(
+                "MLFlow is not installed. Please install MLFlow using pip install google-cloud-aiplatform[autologging] to use autologging in the Vertex SDK."
+            )
+
+        if not self._experiment:
+            raise ValueError(
+                "No experiment set. Make sure to call aiplatform.init(experiment='my-experiment') "
+                "before calling aiplatform.autolog()."
+            )
+
+        if not self.experiment._metadata_context.metadata.get(
+            constants._BACKING_TENSORBOARD_RESOURCE_KEY
+        ):
+            raise ValueError(
+                "Setting an experiment tensorboard is required to use autologging. "
+                "Please set a backing tensorboard resource by calling "
+                "aiplatform.init(experiment_tensorboard=aiplatform.Tensorboard(...))."
+            )
+
+        if disable:
+            if self._existing_tracking_uri:
+                mlflow.set_tracking_uri(self._existing_tracking_uri)
+            mlflow.autolog(disable=True)
+        else:
+            self._existing_tracking_uri = mlflow.get_tracking_uri()
+
+            _ExperimentTracker._initialize_mlflow_plugin()
 
     def log_params(self, params: Dict[str, Union[float, int, str]]):
         """Log single or multiple parameters with specified key and value pairs.

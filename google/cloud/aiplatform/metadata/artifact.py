@@ -18,6 +18,7 @@
 from typing import Optional, Dict, Union
 
 import proto
+import threading
 
 from google.auth import credentials as auth_credentials
 
@@ -217,6 +218,7 @@ class Artifact(resource._Resource):
             project=project, location=location, credentials=credentials
         )
         self._gca_resource = resource
+        self._threading_lock = threading.Lock()
 
         return self
 

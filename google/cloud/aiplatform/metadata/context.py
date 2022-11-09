@@ -18,6 +18,7 @@
 from typing import Optional, Dict, List, Sequence
 
 import proto
+import threading
 
 from google.auth import credentials as auth_credentials
 
@@ -248,6 +249,7 @@ class Context(resource._Resource):
             project=project, location=location, credentials=credentials
         )
         self._gca_resource = resource
+        self._threading_lock = threading.Lock()
 
         return self
 
