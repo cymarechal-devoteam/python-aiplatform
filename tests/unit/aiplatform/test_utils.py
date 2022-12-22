@@ -36,6 +36,7 @@ from google.cloud import storage
 from google.cloud.aiplatform import compat, utils
 from google.cloud.aiplatform.compat.types import pipeline_failure_policy
 from google.cloud.aiplatform.utils import (
+    gcs_utils,
     pipeline_utils,
     prediction_utils,
     tensorboard_utils,
@@ -52,9 +53,9 @@ from google.protobuf import timestamp_pb2
 model_service_client_default = model_service_client_v1
 
 
-GCS_BUCKET = "FAKE_BUCKET"
-GCS_PREFIX = "FAKE/PREFIX"
-FAKE_FILENAME = "FAKE_FILENAME"
+GCS_BUCKET = "fake-bucket"
+GCS_PREFIX = "fake/prefix"
+FAKE_FILENAME = "fake-filename"
 
 
 @pytest.fixture
@@ -456,6 +457,30 @@ def test_get_timestamp_proto(
 def test_timestamped_unique_name():
     name = utils.timestamped_unique_name()
     assert re.match(r"\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-.{5}", name)
+
+
+@pytest.mark.usefixtures("google_auth_mock")
+class TestGcsUtils:
+
+    def test_upload_to_gcs_not_exists(self):
+        with pytest.raises(RuntimeError):
+            gcs_utils.upload_to_gcs("/tmp/not_exist", f"gs://{GCS_BUCKET}/{GCS_PREFIX}")
+
+    def test_stage_local_data_in_gcs_no_data(self):
+        with pytest.raises(RuntimeError):
+            gcs_utils.stage_local_data_in_gcs("/tmp/not_exist")
+
+    def test_generate_gcs_directory_for_pipeline_artifacts(self):
+        output = gcs_utils.generate_gcs_directory_for_pipeline_artifacts(
+                "project", "us-central1")
+        assert output == "gs://project-vertex-pipelines-us-central1/output_artifacts/"
+
+    def test_create_gcs_bucket_for_pipeline_artifacts_if_it_does_not_exist(
+            self, mock_storage_client):
+        output = gcs_utils.create_gcs_bucket_for_pipeline_artifacts_if_it_does_not_exist(
+                project="test-project", location="us-central1")
+        assert mock_storage_client.called
+        assert output == "gs://test-project-vertex-pipelines-us-central1/output_artifacts/"
 
 
 class TestPipelineUtils:
