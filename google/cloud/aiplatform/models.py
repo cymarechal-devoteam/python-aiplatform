@@ -4841,6 +4841,66 @@ class ModelRegistry:
 
         _LOGGER.info(f"Deleted version {version} for {self.model_resource_name}")
 
+    def update_version(
+        self,
+        version: str,
+        description: Optional[str] = None,
+        labels: Optional[Dict[str, str]] = None,
+    ) -> None:
+        """Updates a model version.
+
+        Args:
+            version (str): Required. The version ID to receive the new alias(es).
+            description (str):
+                The description of the model version.
+            labels (Dict[str, str]):
+                Optional. The labels with user-defined metadata to
+                organize your Model versions.
+                Label keys and values can be no longer than 64
+                characters (Unicode codepoints), can only
+                contain lowercase letters, numeric characters,
+                underscores and dashes. International characters
+                are allowed.
+                See https://goo.gl/xmQnxf for more information
+                and examples of labels.
+
+        Raises:
+            ValueError: If `labels` is not the correct format.
+        """
+
+        self.wait()
+
+        current_model_proto = self.gca_resource
+        copied_model_proto = current_model_proto.__class__(current_model_proto)
+        copied_model_proto.name = (
+            self._get_versioned_name(self.model_resource_name, version),
+        )
+
+        update_mask: List[str] = []
+
+        if description:
+            copied_model_proto.version_description = description
+            update_mask.append("version_description")
+
+        if labels:
+            utils.validate_labels(labels)
+
+            copied_model_proto.labels = labels
+            update_mask.append("labels")
+
+        update_mask = field_mask_pb2.FieldMask(paths=update_mask)
+
+        _LOGGER.info(f"Updating model {self.model_resource_name}")
+
+        self.client.update_model(
+            model=copied_model_proto,
+            update_mask=update_mask,
+        )
+
+        _LOGGER.info(f"Completed updating model {self.model_resource_name}")
+
+        self._sync_gca_resource()
+
     def add_version_aliases(
         self,
         new_aliases: List[str],

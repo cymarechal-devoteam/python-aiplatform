@@ -61,7 +61,9 @@ from google.cloud.aiplatform.prediction import LocalModel
 
 from google.protobuf import field_mask_pb2, timestamp_pb2
 
-from test_endpoints import create_endpoint_mock  # noqa: F401
+from test_endpoints import (
+    create_endpoint_mock,
+)  # noqa: F401
 
 _TEST_PROJECT = "test-project"
 _TEST_PROJECT_2 = "test-project-2"
@@ -2666,6 +2668,24 @@ class TestModel:
             name=models.ModelRegistry._get_versioned_name(
                 _TEST_MODEL_PARENT, _TEST_VERSION_ALIAS_1
             )
+        )
+
+    def test_update_version(self, update_model_mock, get_model_with_version):
+        my_model = models.Model(_TEST_MODEL_NAME, _TEST_PROJECT, _TEST_LOCATION)
+        my_model.versioning_registry.update_version(
+            _TEST_VERSION_ALIAS_1, description=_TEST_DESCRIPTION, labels=_TEST_LABEL
+        )
+
+        current_model_proto = gca_model.Model(
+            version_description=_TEST_DESCRIPTION,
+            labels=_TEST_LABEL,
+            name=_TEST_MODEL_RESOURCE_NAME,
+        )
+
+        update_mask = field_mask_pb2.FieldMask(paths=["version_description", "labels"])
+
+        update_model_mock.assert_called_once_with(
+            model=current_model_proto, update_mask=update_mask
         )
 
     def test_add_versions(self, merge_version_aliases_mock, get_model_with_version):
