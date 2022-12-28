@@ -1,6 +1,19 @@
 # Changelog
 
 
+## [1.21.0](https://github.com/googleapis/python-aiplatform/compare/v1.20.0...v1.21.0) (2022-12-28)
+
+
+### Features
+
+* Add default skew threshold to be an optional input at _SkewDetectionConfig and also mark the target_field and data_source of skew config to optional. ([7da4164](https://github.com/googleapis/python-aiplatform/commit/7da4164697ac01ac94a45b34086facfd0d360f1b))
+* Add support for Predict Request Response Logging in Endpoint SDK ([372ab8d](https://github.com/googleapis/python-aiplatform/commit/372ab8dd59b3a2c5e5eae9af46141ff8e215a610))
+
+
+### Bug Fixes
+
+* Pin shapely version to &lt;2.0.0 ([1efd816](https://github.com/googleapis/python-aiplatform/commit/1efd81666ac63e1704322ad5771b3208a35bc479))
+
 ## [1.20.0](https://github.com/googleapis/python-aiplatform/compare/v1.19.1...v1.20.0) (2022-12-15)
 
 
